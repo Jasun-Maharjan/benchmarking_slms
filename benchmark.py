@@ -1,8 +1,41 @@
 import ollama
+import time
 
-response = ollama.chat(model = "llama3.2:3b",
-                       messages = [{
-                           "role" : "user",
-                           "content" : "What is the sun made up of?"
-                       }])
-print(response.message.content)
+MODEL = "llama3.2:3b"
+
+def benchmark(prompt, model = MODEL):
+    start = time.perf_counter()
+    first = None
+    final = None
+
+    for chunk in ollama.chat(
+        model = model,
+        stream = True,
+        messages = [{
+            "role": "user",
+            "content": prompt
+        }]
+    ):
+        if first is None and chunk.message.content:
+            first = time.perf_counter()
+        if chunk.done:
+            final = chunk
+
+    end = time.perf_counter()
+
+    return {
+        "ttftSeconds": first-start,
+        "totalSeconds": end-start,
+        "outputTokens": final.eval_count,
+        "promptTokens": final.prompt_eval_count,
+        "tps_wall": (final.eval_count - 1) / (end - first),
+        "tps_ollama": final.eval_count / (final.eval_duration / 1e9),
+        "load_s": final.load_duration / 1e9,
+    }
+
+if __name__ == "__main__":
+    result = benchmark("Explain what a AI model is in 100 words.")
+    for k, v in result.items():
+        print(f"{k}:{v:.3f}" 
+              if isinstance(v, float)
+              else f"{k}:{v}")
